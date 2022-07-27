@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	ifaceFlag   = flag.String("iface", "eth0", "name of interface")
+	ifaceFlag   = flag.String("iface", "\\Device\\NPF_{2BB79E5F-A4A4-4897-962F-81D4026235D0}", "name of interface")
 	portFlag    = flag.Int("port", 0, "filter source or target port")
 	ipFlag      = flag.String("ip", "", "filter source or target ip")
 	hostFlag    = flag.String("host", "", "filter http request host, using wildcard match(*)")

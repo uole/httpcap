@@ -42,7 +42,7 @@ func (app *App) initLayout() (err error) {
 			return ""
 		}).
 		WithChange(func(i int, v interface{}) {
-			
+
 		})
 	app.contentWidget = widget.NewContentView("main", 0, 0).Offset(51, 0).Editable().Title("Raw")
 	return
@@ -83,12 +83,12 @@ func (app *App) initKeybindings() (err error) {
 }
 
 func (app *App) render() (err error) {
-	app.ui.SetManager(app.sideWidget, app.contentWidget)
-	app.ui.Highlight = true
-	app.ui.SelFgColor = gocui.ColorGreen
 	if err = app.initLayout(); err != nil {
 		return
 	}
+	app.ui.SetManager(app.sideWidget, app.contentWidget)
+	app.ui.Highlight = true
+	app.ui.SelFgColor = gocui.ColorGreen
 	err = app.initKeybindings()
 	return
 }
@@ -116,5 +116,7 @@ func (app *App) Run(ctx context.Context, iface string) (err error) {
 }
 
 func NewApp(filter *Filter) *App {
-	return &App{}
+	return &App{
+		filter: filter,
+	}
 }
