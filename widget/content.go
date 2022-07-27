@@ -24,11 +24,14 @@ type ContentView struct {
 }
 
 func (widget *ContentView) Write(p []byte) (n int, err error) {
+	if widget.editable {
+		_ = widget.view.SetOrigin(0, 0)
+	}
 	widget.view.Clear()
-	widget.view.Rewind()
-	widget.view.SetCursor(0, 0)
 	n, err = widget.view.Write(p)
-	widget.ui.Update(func(gui *gocui.Gui) error { return nil })
+	widget.ui.Update(func(gui *gocui.Gui) error {
+		return nil
+	})
 	return
 }
 
@@ -36,6 +39,9 @@ func (widget *ContentView) draw() {
 	widget.ui.Update(func(gui *gocui.Gui) error {
 		if view, err := gui.View(widget.name); err == nil {
 			view.Clear()
+			if widget.editable {
+				_ = view.SetOrigin(0, 0)
+			}
 			_, _ = fmt.Fprintln(view, widget.content)
 		}
 		return nil
