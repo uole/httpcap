@@ -53,7 +53,7 @@ func (app *App) initLayout() (err error) {
 				bytebufferpool.Put(buf)
 			}
 		})
-	app.contentWidget = widget.NewContentView("main", 0, 0).Offset(51, 0).Editable().Title("Raw")
+	app.contentWidget = widget.NewContentView("main", 0, 0).Offset(51, 0).Title("Raw")
 	return
 }
 
