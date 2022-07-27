@@ -8,6 +8,7 @@ import (
 	"github.com/uole/httpcap/http"
 	"github.com/uole/httpcap/widget"
 	"github.com/valyala/bytebufferpool"
+	"strings"
 )
 
 type (
@@ -49,7 +50,7 @@ func (app *App) initLayout() (err error) {
 				p.request.WriteTo(buf)
 				buf.WriteString("\r\n\r\n")
 				p.response.WriteTo(buf)
-				app.contentWidget.SetContent(buf.String())
+				app.contentWidget.SetContent(strings.ReplaceAll(buf.String(), "\r", ""))
 				bytebufferpool.Put(buf)
 			}
 		})
