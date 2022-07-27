@@ -25,6 +25,8 @@ type ContentView struct {
 
 func (widget *ContentView) Write(p []byte) (n int, err error) {
 	widget.view.Clear()
+	widget.view.Rewind()
+	widget.view.SetCursor(0, 0)
 	n, err = widget.view.Write(p)
 	widget.ui.Update(func(gui *gocui.Gui) error { return nil })
 	return
