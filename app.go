@@ -8,7 +8,6 @@ import (
 	"github.com/uole/httpcap/http"
 	"github.com/uole/httpcap/widget"
 	"github.com/valyala/bytebufferpool"
-	"strings"
 )
 
 type (
@@ -47,14 +46,20 @@ func (app *App) initLayout() (err error) {
 		WithChange(func(i int, v interface{}) {
 			if p, ok := v.(*packet); ok {
 				buf := bytebufferpool.Get()
-				p.request.WriteTo(buf)
-				buf.WriteString("\r\n\r\n")
-				p.response.WriteTo(buf)
-				app.contentWidget.SetContent(strings.ReplaceAll(buf.String(), "\r", ""))
+				_, _ = p.request.WriteTo(buf)
+				_, _ = buf.WriteString("\r\n\r\n")
+				_, _ = p.response.WriteTo(buf)
+				b := buf.Bytes()
+				for idx := 0; idx < len(b); idx++ {
+					if b[idx] == '\r' {
+						b[idx] = ' '
+					}
+				}
+				app.contentWidget.Write(b)
 				bytebufferpool.Put(buf)
 			}
 		})
-	app.contentWidget = widget.NewContentView("main", 0, 0).Offset(51, 0).Title("Raw")
+	app.contentWidget = widget.NewContentView("main", 0, 0).Offset(51, 0).Editable().Title("Raw")
 	return
 }
 

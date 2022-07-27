@@ -23,6 +23,13 @@ type ContentView struct {
 	view          *gocui.View
 }
 
+func (widget *ContentView) Write(p []byte) (n int, err error) {
+	widget.view.Clear()
+	n, err = widget.view.Write(p)
+	widget.ui.Update(func(gui *gocui.Gui) error { return nil })
+	return
+}
+
 func (widget *ContentView) draw() {
 	widget.ui.Update(func(gui *gocui.Gui) error {
 		if view, err := gui.View(widget.name); err == nil {
