@@ -55,7 +55,7 @@ func (app *App) initLayout() (err error) {
 						b[idx] = ' '
 					}
 				}
-				app.contentWidget.Write(b)
+				_, _ = app.contentWidget.Write(b)
 				bytebufferpool.Put(buf)
 			}
 		})

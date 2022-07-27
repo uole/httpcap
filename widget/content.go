@@ -26,6 +26,7 @@ type ContentView struct {
 func (widget *ContentView) Write(p []byte) (n int, err error) {
 	if widget.editable {
 		_ = widget.view.SetOrigin(0, 0)
+		_ = widget.view.SetCursor(0, 0)
 	}
 	widget.view.Clear()
 	n, err = widget.view.Write(p)
@@ -41,6 +42,7 @@ func (widget *ContentView) draw() {
 			view.Clear()
 			if widget.editable {
 				_ = view.SetOrigin(0, 0)
+				_ = view.SetCursor(0, 0)
 			}
 			_, _ = fmt.Fprintln(view, widget.content)
 		}
