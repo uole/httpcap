@@ -2,6 +2,7 @@ package httpcap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/jroimartin/gocui"
 	"github.com/uole/httpcap/http"
@@ -46,6 +47,7 @@ func (app *App) initLayout() (err error) {
 			if p, ok := v.(*packet); ok {
 				buf := bytebufferpool.Get()
 				p.request.WriteTo(buf)
+				buf.WriteString("\r\n\r\n")
 				p.response.WriteTo(buf)
 				app.contentWidget.SetContent(buf.String())
 				bytebufferpool.Put(buf)
@@ -117,8 +119,11 @@ func (app *App) Run(ctx context.Context, iface string) (err error) {
 	if err = app.initCapture(iface); err != nil {
 		return
 	}
-	err = app.ui.MainLoop()
-	err = app.capture.Stop()
+	if err = app.ui.MainLoop(); err != nil {
+		if errors.Is(err, gocui.ErrQuit) {
+			err = nil
+		}
+	}
 	return
 }
 

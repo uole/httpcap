@@ -25,6 +25,7 @@ func (r *Request) WriteTo(w io.Writer) (n int64, err error) {
 	writer := bytebufferpool.Get()
 	defer bytebufferpool.Put(writer)
 	_, err = writer.WriteString(r.Method + " " + r.RequestURI + " " + r.Proto)
+	_, err = writer.WriteString("\r\n")
 	err = r.Header.Write(writer)
 	_, err = writer.WriteString("\r\n")
 	if r.ContentLength > 0 {
