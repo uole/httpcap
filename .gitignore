@@ -5,6 +5,12 @@
 *.so
 *.dylib
 
+.idea
+
+vendor
+
+cmd/mock
+
 # Test binary, built with `go test -c`
 *.test
 
