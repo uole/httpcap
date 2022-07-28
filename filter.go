@@ -6,6 +6,7 @@ type Filter struct {
 	IP   string `json:"ip"`
 	Port int    `json:"port"`
 	Host string `json:"host"`
+	BPF  string `json:"bpf"`
 }
 
 func (filter *Filter) Match(host string) bool {

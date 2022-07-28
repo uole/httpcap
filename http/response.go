@@ -65,6 +65,7 @@ func ReadResponse(r *bufio.Reader, req *Request) (res *Response, err error) {
 	statusCode := res.Status
 	if i := strings.IndexByte(res.Status, ' '); i != -1 {
 		statusCode = res.Status[:i]
+		res.Status = res.Status[i+1:]
 	}
 	if len(statusCode) != 3 {
 		return nil, fmt.Errorf("malformed HTTP status code %s", statusCode)

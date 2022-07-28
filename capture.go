@@ -94,13 +94,20 @@ func (cap *Capture) Start(ctx context.Context) (err error) {
 	if cap.handle, err = pcap.OpenLive(cap.iface, int32(cap.snaplen), true, pcap.BlockForever); err != nil {
 		return
 	}
-	rules = cap.grantRules()
-	if len(rules) > 0 {
-		bpf := strings.Join(rules, " and ")
-		if err = cap.handle.SetBPFFilter(bpf); err != nil {
+	if cap.filter.BPF != "" {
+		if err = cap.handle.SetBPFFilter(cap.filter.BPF); err != nil {
 			return
 		}
+	} else {
+		rules = cap.grantRules()
+		if len(rules) > 0 {
+			bpf := strings.Join(rules, " and ")
+			if err = cap.handle.SetBPFFilter(bpf); err != nil {
+				return
+			}
+		}
 	}
+
 	cap.streamFactory = NewFactory(cap.ctx, cap.process)
 	streamPool := reassembly.NewStreamPool(cap.streamFactory)
 	assembler := reassembly.NewAssembler(streamPool)

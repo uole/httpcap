@@ -27,8 +27,6 @@ type (
 		offsetY       int
 		contentWidth  int
 		contentHeight int
-		autoWidth     bool
-		autoHeight    bool
 		visibleOffset int
 		once          sync.Once
 		mutex         sync.RWMutex
@@ -37,7 +35,7 @@ type (
 )
 
 func (widget *ListView) draw() {
-	contentVisibleLines := widget.contentHeight - 2 //2px border
+	contentVisibleLines := widget.visibleLines() - 2 //2px border
 	if widget.cursor > widget.visibleOffset {
 		if widget.cursor-widget.visibleOffset > contentVisibleLines {
 			widget.visibleOffset = widget.cursor - contentVisibleLines
@@ -92,10 +90,26 @@ func (widget *ListView) Push(v interface{}) {
 	widget.mutex.Lock()
 	defer widget.mutex.Unlock()
 	widget.values = append(widget.values, v)
-	contentVisibleLines := widget.contentHeight - 2
+	contentVisibleLines := widget.visibleLines() - 2
 	if len(widget.values) < contentVisibleLines || len(widget.values) <= widget.visibleOffset+contentVisibleLines+1 {
 		widget.draw()
 	}
+}
+
+func (widget *ListView) visibleLines() int {
+	var (
+		n int
+	)
+	if widget.contentHeight == 0 {
+		n = widget.clientHeight - widget.offsetY - 1
+	} else {
+		if widget.contentHeight < 0 {
+			n = (widget.clientHeight + widget.contentHeight)
+		} else {
+			n = widget.contentHeight
+		}
+	}
+	return n
 }
 
 func (widget *ListView) MoveNext() (v interface{}) {
@@ -150,21 +164,41 @@ func (widget *ListView) Reset() {
 }
 
 func (widget *ListView) Layout(ui *gocui.Gui) (err error) {
+	var (
+		x, y             int
+		offsetX, offsetY int
+	)
 	widget.ui = ui
 	widget.clientWidth, widget.clientHeight = ui.Size()
-	if widget.contentWidth == 0 || widget.autoWidth {
-		if widget.contentWidth == 0 {
-			widget.autoWidth = true
-		}
-		widget.contentWidth = widget.clientWidth - widget.offsetX - 1 //1px border
+	if widget.offsetX < 0 {
+		offsetX = widget.clientWidth + widget.offsetX
+	} else {
+		offsetX = widget.offsetX
 	}
-	if widget.contentHeight == 0 || widget.autoHeight {
-		if widget.contentHeight == 0 {
-			widget.autoHeight = true
-		}
-		widget.contentHeight = widget.clientHeight - widget.offsetY - 1 //1px border
+	if widget.offsetY < 0 {
+		offsetY = widget.clientHeight + widget.offsetY
+	} else {
+		offsetY = widget.offsetY
 	}
-	if widget.view, err = ui.SetView(widget.name, widget.offsetX, widget.offsetY, widget.contentWidth+widget.offsetX, widget.contentHeight+widget.offsetY); err != nil {
+	if widget.contentWidth == 0 {
+		x = widget.clientWidth - 1
+	} else {
+		if widget.contentWidth < 0 {
+			x = offsetX + (widget.clientWidth + widget.contentWidth)
+		} else {
+			x = offsetX + widget.contentWidth
+		}
+	}
+	if widget.contentHeight == 0 {
+		y = widget.clientHeight - widget.offsetY - 1
+	} else {
+		if widget.contentHeight < 0 {
+			y = offsetY + (widget.clientHeight + widget.contentHeight)
+		} else {
+			y = offsetY + widget.contentHeight
+		}
+	}
+	if widget.view, err = ui.SetView(widget.name, offsetX, offsetY, x, y); err != nil {
 		if !errors.Is(err, gocui.ErrUnknownView) {
 			return
 		}

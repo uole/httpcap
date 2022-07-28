@@ -16,8 +16,6 @@ type ContentView struct {
 	offsetY       int
 	contentWidth  int
 	contentHeight int
-	autoWidth     bool
-	autoHeight    bool
 	editable      bool
 	ui            *gocui.Gui
 	view          *gocui.View
@@ -37,6 +35,9 @@ func (widget *ContentView) Write(p []byte) (n int, err error) {
 }
 
 func (widget *ContentView) draw() {
+	if widget.ui == nil {
+		return
+	}
 	widget.ui.Update(func(gui *gocui.Gui) error {
 		if view, err := gui.View(widget.name); err == nil {
 			view.Clear()
@@ -50,9 +51,10 @@ func (widget *ContentView) draw() {
 	})
 }
 
-func (widget *ContentView) SetContent(s string) {
+func (widget *ContentView) SetContent(s string) *ContentView {
 	widget.content = s
 	widget.draw()
+	return widget
 }
 
 func (widget *ContentView) AppendString(s string) {
@@ -80,21 +82,41 @@ func (widget *ContentView) Editable() *ContentView {
 }
 
 func (widget *ContentView) Layout(ui *gocui.Gui) (err error) {
+	var (
+		x, y             int
+		offsetX, offsetY int
+	)
 	widget.ui = ui
 	widget.clientWidth, widget.clientHeight = ui.Size()
-	if widget.contentWidth == 0 || widget.autoWidth {
-		if widget.clientWidth == 0 {
-			widget.autoWidth = true
-		}
-		widget.contentWidth = widget.clientWidth - widget.offsetX - 1
+	if widget.offsetX < 0 {
+		offsetX = widget.clientWidth + widget.offsetX
+	} else {
+		offsetX = widget.offsetX
 	}
-	if widget.contentHeight == 0 || widget.autoHeight {
-		if widget.clientWidth == 0 {
-			widget.autoHeight = true
-		}
-		widget.contentHeight = widget.clientHeight - widget.offsetY - 1
+	if widget.offsetY < 0 {
+		offsetY = widget.clientHeight + widget.offsetY
+	} else {
+		offsetY = widget.offsetY
 	}
-	if widget.view, err = ui.SetView(widget.name, widget.offsetX, widget.offsetY, widget.contentWidth+widget.offsetX, widget.contentHeight+widget.offsetY); err != nil {
+	if widget.contentWidth == 0 {
+		x = widget.clientWidth - 1
+	} else {
+		if widget.contentWidth < 0 {
+			x = offsetX + (widget.clientWidth + widget.contentWidth)
+		} else {
+			x = offsetX + widget.contentWidth
+		}
+	}
+	if widget.contentHeight == 0 {
+		y = widget.clientHeight - widget.offsetY - 1
+	} else {
+		if widget.contentHeight < 0 {
+			y = offsetY + (widget.clientHeight + widget.contentHeight)
+		} else {
+			y = offsetY + widget.contentHeight
+		}
+	}
+	if widget.view, err = ui.SetView(widget.name, offsetX, offsetY, x, y); err != nil {
 		if !errors.Is(err, gocui.ErrUnknownView) {
 			return
 		}
@@ -102,6 +124,9 @@ func (widget *ContentView) Layout(ui *gocui.Gui) (err error) {
 	}
 	if widget.title != "" {
 		widget.view.Title = widget.title
+	}
+	if widget.content != "" {
+		_, _ = fmt.Fprintln(widget.view, widget.content)
 	}
 	if widget.editable {
 		widget.view.Editable = true
