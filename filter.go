@@ -10,6 +10,9 @@ type Filter struct {
 }
 
 func (filter *Filter) Match(host string) bool {
+	if len(host) == 0 {
+		return false
+	}
 	if len(filter.Host) == 0 || filter.Host == "*" {
 		return true
 	}
