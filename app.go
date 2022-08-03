@@ -40,6 +40,8 @@ type (
 
 func (app *App) Handle(req *http.Request, res *http.Response) {
 	if app.state.paused {
+		req.Release()
+		res.Release()
 		return
 	}
 	app.state.NumOfCapture++
@@ -82,7 +84,6 @@ func (app *App) updateSummary() {
 		color.MagentaString("F5"),
 		color.MagentaString("F6"),
 	))
-
 	app.footerWidget.SetContent(strings.Join(msg, "    "))
 }
 
@@ -121,7 +122,12 @@ func (app *App) initCapture(iface string) (err error) {
 
 func (app *App) initKeybindings() (err error) {
 	if err = app.ui.SetKeybinding("", gocui.KeyF5, gocui.ModNone, func(gui *gocui.Gui, view *gocui.View) error {
-		app.sideWidget.Reset()
+		app.sideWidget.Reset(func(v interface{}) {
+			if p, ok := v.(*packet); ok {
+				p.request.Release()
+				p.response.Release()
+			}
+		})
 		app.state.NumOfCapture = 0
 		app.updateSummary()
 		return nil

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"github.com/uole/httpcap/internal/bytepool"
 	"github.com/valyala/bytebufferpool"
 	"io"
 	"net/http"
@@ -22,6 +23,12 @@ type Response struct {
 	Body          []byte
 	ContentLength int
 	Address       string
+}
+
+func (r *Response) Release() {
+	if r.ContentLength > 0 {
+		bytepool.Put(r.Body)
+	}
 }
 
 func (r *Response) WriteTo(w io.Writer) (n int64, err error) {
@@ -86,7 +93,7 @@ func ReadResponse(r *bufio.Reader, req *Request) (res *Response, err error) {
 	} else if res.Header.Get("Content-Length") != "" {
 		res.ContentLength, _ = strconv.Atoi(res.Header.Get("Content-Length"))
 		if res.ContentLength > 0 {
-			res.Body = make([]byte, res.ContentLength)
+			res.Body = bytepool.Get(req.ContentLength)
 			_, err = io.ReadFull(r, res.Body)
 		}
 	} else {

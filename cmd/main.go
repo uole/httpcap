@@ -7,6 +7,8 @@ import (
 	"github.com/google/gopacket/pcap"
 	"github.com/uole/httpcap"
 	"github.com/uole/httpcap/version"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 )
 
@@ -18,6 +20,7 @@ var (
 	hostFlag    = flag.String("host", "", "filter http request host, using wildcard match(*)")
 	versionFlag = flag.Bool("v", false, "display version info and exit")
 	deviceFlag  = flag.Bool("l", false, "list of interfaces and exit")
+	pprofFlag   = flag.Bool("pprof", false, "Enable http debug pprof")
 )
 
 func main() {
@@ -40,6 +43,11 @@ func main() {
 			fmt.Printf("%-36s %s\n", i.Name, i.Description)
 		}
 		os.Exit(0)
+	}
+	if *pprofFlag {
+		go func() {
+			_ = http.ListenAndServe(":8080", nil)
+		}()
 	}
 	app := httpcap.NewApp(&httpcap.Filter{
 		IP:   *ipFlag,

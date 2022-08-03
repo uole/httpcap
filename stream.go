@@ -6,28 +6,31 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/reassembly"
-	httppkg "github.com/uole/httpcap/http"
+	httpkg "github.com/uole/httpcap/http"
 	"net"
 	"net/http"
-	"sync"
 )
 
 type (
-	HandleFunc func(*httppkg.Request, *httppkg.Response)
+	HandleFunc func(*httpkg.Request, *httpkg.Response)
 
 	StreamFactory struct {
 		ctx        context.Context
-		wg         sync.WaitGroup
 		handleFunc HandleFunc
 	}
 
 	Stream struct {
-		validate  bool
-		in        *Buffer
-		out       *Buffer
-		tcp       *layers.TCP
-		net       gopacket.Flow
-		transport gopacket.Flow
+		validate      bool
+		in            *Buffer
+		out           *Buffer
+		tcp           *layers.TCP
+		isWebsocket   bool
+		net           gopacket.Flow
+		transport     gopacket.Flow
+		srcAddr       string
+		dstAddr       string
+		numOfRequest  int32
+		numOfResponse int32
 	}
 )
 
@@ -68,13 +71,17 @@ func (stream *Stream) ReassembledSG(sg reassembly.ScatterGather, ac reassembly.A
 	}
 	dir, _, _, _ = sg.Info()
 	length, _ = sg.Lengths()
-	if length > 0 {
-		buf = sg.Fetch(length)
-		if dir == reassembly.TCPDirClientToServer {
-			_ = stream.in.putBytes(buf)
-		} else {
-			_ = stream.out.putBytes(buf)
+	if length <= 0 {
+		return
+	}
+	buf = sg.Fetch(length)
+	if dir == reassembly.TCPDirClientToServer {
+		_ = stream.in.putBytes(buf)
+	} else {
+		if stream.isWebsocket {
+			return
 		}
+		_ = stream.out.putBytes(buf)
 	}
 }
 
@@ -84,31 +91,29 @@ func (stream *Stream) ReassemblyComplete(ac reassembly.AssemblerContext) bool {
 	return true
 }
 
-func (stream *Stream) NextRequest() (req *httppkg.Request, res *httppkg.Response, err error) {
-	if req, err = httppkg.ReadRequest(stream.in.Reader()); err != nil {
+func (stream *Stream) NextRequest() (req *httpkg.Request, res *httpkg.Response, err error) {
+	if req, err = httpkg.ReadRequest(stream.in.Reader()); err != nil {
 		return
 	}
-	if res, err = httppkg.ReadResponse(stream.out.Reader(), req); err != nil {
+	if req.Header.Get("Upgrade") == "websocket" {
+		stream.isWebsocket = true
+	}
+	if res, err = httpkg.ReadResponse(stream.out.Reader(), req); err != nil {
 		return
 	}
 	return
 }
 
 func (factory *StreamFactory) process(stream *Stream) {
-	defer func() {
-		factory.wg.Done()
-	}()
 	for {
-		req, res, err := stream.NextRequest()
-		if err != nil {
+		if req, res, err := stream.NextRequest(); err != nil {
 			break
-		}
-		srcAddr, dstAddr := stream.net.Endpoints()
-		srcPort, dstPort := stream.transport.Endpoints()
-		req.Address = net.JoinHostPort(srcAddr.String(), srcPort.String())
-		res.Address = net.JoinHostPort(dstAddr.String(), dstPort.String())
-		if factory.handleFunc != nil {
-			factory.handleFunc(req, res)
+		} else {
+			req.Address = stream.srcAddr
+			res.Address = stream.dstAddr
+			if factory.handleFunc != nil {
+				factory.handleFunc(req, res)
+			}
 		}
 	}
 }
@@ -118,16 +123,15 @@ func (factory *StreamFactory) New(netFlow, tcpFlow gopacket.Flow, tcp *layers.TC
 		tcp:       tcp,
 		net:       netFlow,
 		transport: tcpFlow,
-		in:        newBuffer(nil),
-		out:       newBuffer(nil),
+		in:        newBuffer(),
+		out:       newBuffer(),
 	}
-	factory.wg.Add(1)
+	srcAddr, dstAddr := stream.net.Endpoints()
+	srcPort, dstPort := stream.transport.Endpoints()
+	stream.srcAddr = net.JoinHostPort(srcAddr.String(), srcPort.String())
+	stream.dstAddr = net.JoinHostPort(dstAddr.String(), dstPort.String())
 	go factory.process(stream)
 	return stream
-}
-
-func (factory *StreamFactory) Wait() {
-	factory.wg.Wait()
 }
 
 func NewFactory(ctx context.Context, f HandleFunc) *StreamFactory {

@@ -26,6 +26,8 @@ type Capture struct {
 
 func (cap *Capture) process(req *http.Request, res *http.Response) {
 	if !cap.filter.Match(req.Host) {
+		req.Release()
+		res.Release()
 		return
 	}
 	if cap.handleFunc != nil {
@@ -42,16 +44,16 @@ func (cap *Capture) ioLoop(assembler *reassembly.Assembler) {
 	}()
 	for {
 		select {
-		case packet := <-cap.packChan:
-			if packet == nil {
+		case pkg := <-cap.packChan:
+			if pkg == nil {
 				return
 			}
 			numOfPacket++
-			if tcp, ok := packet.TransportLayer().(*layers.TCP); ok {
-				assembler.AssembleWithContext(packet.NetworkLayer().NetworkFlow(), tcp, &AssemblerContext{captureInfo: packet.Metadata().CaptureInfo})
+			if tcp, ok := pkg.TransportLayer().(*layers.TCP); ok {
+				assembler.AssembleWithContext(pkg.NetworkLayer().NetworkFlow(), tcp, &AssemblerContext{captureInfo: pkg.Metadata().CaptureInfo})
 			}
 			if numOfPacket%10000 == 0 {
-				ref := packet.Metadata().CaptureInfo.Timestamp
+				ref := pkg.Metadata().CaptureInfo.Timestamp
 				assembler.FlushWithOptions(reassembly.FlushOptions{T: ref.Add(time.Minute * 3 * -1), TC: ref.Add(time.Minute * 5 * -1)})
 			}
 		case <-cap.ctx.Done():
@@ -107,7 +109,6 @@ func (cap *Capture) Start(ctx context.Context) (err error) {
 			}
 		}
 	}
-
 	cap.streamFactory = NewFactory(cap.ctx, cap.process)
 	streamPool := reassembly.NewStreamPool(cap.streamFactory)
 	assembler := reassembly.NewAssembler(streamPool)
@@ -120,7 +121,6 @@ func (cap *Capture) Start(ctx context.Context) (err error) {
 
 func (cap *Capture) Stop() (err error) {
 	cap.handle.Close()
-	cap.streamFactory.Wait()
 	return
 }
 

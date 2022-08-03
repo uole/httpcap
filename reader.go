@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"github.com/uole/httpcap/internal/bufferpool"
 	"io"
 	"sync/atomic"
 	"time"
@@ -15,6 +16,7 @@ type Buffer struct {
 	closeChan  chan struct{}
 	notifyChan chan struct{}
 	buf        *bytes.Buffer
+	lastOp     time.Time
 }
 
 func (r *Buffer) Reader() *bufio.Reader {
@@ -27,6 +29,7 @@ func (r *Buffer) putBytes(b []byte) (err error) {
 		return
 	}
 	r.buf.Write(b)
+	r.lastOp = time.Now()
 	select {
 	case r.notifyChan <- struct{}{}:
 	case <-r.closeChan:
@@ -70,18 +73,16 @@ func (r *Buffer) Close() (err error) {
 	if atomic.CompareAndSwapInt32(&r.closeFlag, 0, 1) {
 		close(r.closeChan)
 		close(r.notifyChan)
+		bufferpool.Put(r.buf)
 	}
 	return
 }
 
-func newBuffer(buf *bytes.Buffer) *Buffer {
-	if buf == nil {
-		buf = new(bytes.Buffer)
-	}
+func newBuffer() *Buffer {
 	b := &Buffer{
 		closeChan:  make(chan struct{}),
 		notifyChan: make(chan struct{}, 1),
-		buf:        buf,
+		buf:        bufferpool.Get(),
 	}
 	b.br = bufio.NewReader(b)
 	return b

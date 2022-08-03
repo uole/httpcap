@@ -147,9 +147,14 @@ func (widget *ListView) MovePrev() (v interface{}) {
 	return v
 }
 
-func (widget *ListView) Reset() {
+func (widget *ListView) Reset(f func(v interface{})) {
 	widget.mutex.Lock()
 	defer widget.mutex.Unlock()
+	if f == nil {
+		for _, v := range widget.values {
+			f(v)
+		}
+	}
 	widget.values = make([]interface{}, 0)
 	widget.visibleOffset = 0
 	widget.cursor = 0
