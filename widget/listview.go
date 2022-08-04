@@ -86,6 +86,15 @@ func (widget *ListView) WithChange(f ChangeFunc) *ListView {
 	return widget
 }
 
+func (widget *ListView) Item(idx int) (v interface{}, ok bool) {
+	widget.mutex.RLock()
+	defer widget.mutex.RUnlock()
+	if idx >= len(widget.values) || idx < 0 {
+		return nil, false
+	}
+	return widget.values[idx], true
+}
+
 func (widget *ListView) Push(v interface{}) {
 	widget.mutex.Lock()
 	defer widget.mutex.Unlock()

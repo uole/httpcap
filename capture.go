@@ -8,20 +8,21 @@ import (
 	"github.com/google/gopacket/pcap"
 	"github.com/google/gopacket/reassembly"
 	"github.com/uole/httpcap/http"
+	"github.com/uole/httpcap/internal/factory"
+	tcpFactory "github.com/uole/httpcap/internal/factory/tcp"
 	"strconv"
 	"strings"
 	"time"
 )
 
 type Capture struct {
-	ctx           context.Context
-	iface         string
-	snaplen       int
-	filter        *Filter
-	packChan      chan gopacket.Packet
-	handle        *pcap.Handle
-	handleFunc    HandleFunc
-	streamFactory *StreamFactory
+	ctx        context.Context
+	iface      string
+	snaplen    int
+	filter     *Filter
+	packChan   chan gopacket.Packet
+	handle     *pcap.Handle
+	handleFunc factory.HandleFunc
 }
 
 func (cap *Capture) process(req *http.Request, res *http.Response) {
@@ -36,10 +37,9 @@ func (cap *Capture) process(req *http.Request, res *http.Response) {
 }
 
 func (cap *Capture) ioLoop(assembler *reassembly.Assembler) {
-	var (
-		numOfPacket int
-	)
+	ticker := time.NewTicker(time.Minute)
 	defer func() {
+		ticker.Stop()
 		assembler.FlushAll()
 	}()
 	for {
@@ -48,14 +48,23 @@ func (cap *Capture) ioLoop(assembler *reassembly.Assembler) {
 			if pkg == nil {
 				return
 			}
-			numOfPacket++
 			if tcp, ok := pkg.TransportLayer().(*layers.TCP); ok {
 				assembler.AssembleWithContext(pkg.NetworkLayer().NetworkFlow(), tcp, &AssemblerContext{captureInfo: pkg.Metadata().CaptureInfo})
+				//if assembler, ok := v.(*reassembly.Assembler); ok {
+				//	assembler.AssembleWithContext(pkg.NetworkLayer().NetworkFlow(), tcp, &AssemblerContext{captureInfo: pkg.Metadata().CaptureInfo})
+				//}
+				//if assembler, ok := v.(*tcpassembly.Assembler); ok {
+				//	assembler.AssembleWithTimestamp(pkg.NetworkLayer().NetworkFlow(), tcp, pkg.Metadata().Timestamp)
+				//}
 			}
-			if numOfPacket%10000 == 0 {
-				ref := pkg.Metadata().CaptureInfo.Timestamp
-				assembler.FlushWithOptions(reassembly.FlushOptions{T: ref.Add(time.Minute * 3 * -1), TC: ref.Add(time.Minute * 5 * -1)})
-			}
+		case <-ticker.C:
+			assembler.FlushCloseOlderThan(time.Now().Add(time.Minute * -3))
+			//if assembler, ok := v.(*reassembly.Assembler); ok {
+			//	assembler.FlushCloseOlderThan(time.Now().Add(time.Minute * -2))
+			//}
+			//if assembler, ok := v.(*tcpassembly.Assembler); ok {
+			//	assembler.FlushOlderThan(time.Now().Add(time.Minute * -2))
+			//}
 		case <-cap.ctx.Done():
 			return
 		}
@@ -74,15 +83,16 @@ func (cap *Capture) grantRules() []string {
 	return rules
 }
 
-func (cap *Capture) WithHandle(f HandleFunc) *Capture {
+func (cap *Capture) WithHandle(f factory.HandleFunc) *Capture {
 	cap.handleFunc = f
 	return cap
 }
 
 func (cap *Capture) Start(ctx context.Context) (err error) {
 	var (
-		ifs   []pcap.Interface
-		rules []string
+		ifs       []pcap.Interface
+		rules     []string
+		assembler *reassembly.Assembler
 	)
 	cap.ctx = ctx
 	if cap.iface == "" {
@@ -109,9 +119,9 @@ func (cap *Capture) Start(ctx context.Context) (err error) {
 			}
 		}
 	}
-	cap.streamFactory = NewFactory(cap.ctx, cap.process)
-	streamPool := reassembly.NewStreamPool(cap.streamFactory)
-	assembler := reassembly.NewAssembler(streamPool)
+	streamFactory := tcpFactory.New(cap.ctx, cap.process)
+	streamPool := reassembly.NewStreamPool(streamFactory)
+	assembler = reassembly.NewAssembler(streamPool)
 	source := gopacket.NewPacketSource(cap.handle, cap.handle.LinkType())
 	source.NoCopy = true
 	cap.packChan = source.Packets()

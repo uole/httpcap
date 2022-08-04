@@ -9,6 +9,7 @@ import (
 	"github.com/uole/httpcap/http"
 	"github.com/uole/httpcap/widget"
 	"github.com/valyala/bytebufferpool"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -32,6 +33,7 @@ type (
 		ui            *gocui.Gui
 		capture       *Capture
 		state         *State
+		curIndex      int
 		sideWidget    *widget.ListView
 		contentWidget *widget.ContentView
 		footerWidget  *widget.ContentView
@@ -69,6 +71,22 @@ func (app *App) formatRequest(idx int, v interface{}) string {
 	return ""
 }
 
+func (app *App) drawPacket(p *packet, displayLargeBody bool) {
+	buf := bytebufferpool.Get()
+	defer bytebufferpool.Put(buf)
+	_, _ = buf.WriteString(color.MagentaString("\nAddress: ") + color.YellowString("%s <--> %s\n\n", p.request.Address, p.response.Address))
+	_, _ = p.request.WriteTo(buf)
+	_, _ = buf.WriteString("\r\n\r\n")
+	_, _ = p.response.Dumper(buf, displayLargeBody)
+	b := buf.Bytes()
+	for idx := 0; idx < len(b); idx++ {
+		if b[idx] == '\r' {
+			b[idx] = ' '
+		}
+	}
+	_, _ = app.contentWidget.Write(b)
+}
+
 func (app *App) updateSummary() {
 	msg := make([]string, 0)
 	if app.state.paused {
@@ -77,10 +95,12 @@ func (app *App) updateSummary() {
 		msg = append(msg, color.New(color.FgBlack, color.BgGreen).Sprintf("%-8s", "Capture"))
 	}
 	msg = append(msg, color.BlueString("Requests")+" "+strconv.Itoa(app.state.NumOfCapture))
-	msg = append(msg, fmt.Sprintf("%s %s Exit %s Swtich %s Clear %s Pause/Capture",
+	msg = append(msg, color.BlueString("Goroutine")+" "+strconv.Itoa(runtime.NumGoroutine()))
+	msg = append(msg, fmt.Sprintf("%s %s Exit %s Swtich Tab %s Show All %s Clear %s Pause/Capture",
 		color.BlueString("Shortcut"),
 		color.MagentaString("^C"),
 		color.MagentaString("Tab"),
+		color.MagentaString("Space"),
 		color.MagentaString("F5"),
 		color.MagentaString("F6"),
 	))
@@ -88,19 +108,9 @@ func (app *App) updateSummary() {
 }
 
 func (app *App) handleSelectedChange(i int, v interface{}) {
+	app.curIndex = i
 	if p, ok := v.(*packet); ok {
-		buf := bytebufferpool.Get()
-		_, _ = p.request.WriteTo(buf)
-		_, _ = buf.WriteString("\r\n\r\n")
-		_, _ = p.response.WriteTo(buf)
-		b := buf.Bytes()
-		for idx := 0; idx < len(b); idx++ {
-			if b[idx] == '\r' {
-				b[idx] = ' '
-			}
-		}
-		_, _ = app.contentWidget.Write(b)
-		bytebufferpool.Put(buf)
+		app.drawPacket(p, false)
 	}
 }
 
@@ -121,6 +131,15 @@ func (app *App) initCapture(iface string) (err error) {
 }
 
 func (app *App) initKeybindings() (err error) {
+	if err = app.ui.SetKeybinding("", gocui.KeySpace, gocui.ModNone, func(gui *gocui.Gui, view *gocui.View) error {
+		if v, ok := app.sideWidget.Item(app.curIndex); ok {
+			p := v.(*packet)
+			app.drawPacket(p, true)
+		}
+		return nil
+	}); err != nil {
+		return
+	}
 	if err = app.ui.SetKeybinding("", gocui.KeyF5, gocui.ModNone, func(gui *gocui.Gui, view *gocui.View) error {
 		app.sideWidget.Reset(func(v interface{}) {
 			if p, ok := v.(*packet); ok {

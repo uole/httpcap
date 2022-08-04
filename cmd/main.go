@@ -7,15 +7,23 @@ import (
 	"github.com/google/gopacket/pcap"
 	"github.com/uole/httpcap"
 	"github.com/uole/httpcap/version"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"regexp"
+	"strconv"
+	"time"
 )
 
 var (
-	ifaceFlag   = flag.String("i", "eth0", "name of interface")
-	filterFlag  = flag.String("f", "", "packet filter in libpcap filter syntax")
-	portFlag    = flag.Int("p", 0, "filter source or target port")
+	numReg = regexp.MustCompile(`^\d+$`)
+)
+
+var (
+	ifaceFlag   = flag.String("i", "7", "name of interface")
+	filterFlag  = flag.String("f", "", "BPF filter in libpcap filter syntax")
+	portFlag    = flag.Int("p", 80, "filter source or target port")
 	ipFlag      = flag.String("ip", "", "filter source or target ip")
 	hostFlag    = flag.String("host", "", "filter http request host, using wildcard match(*)")
 	versionFlag = flag.Bool("v", false, "display version info and exit")
@@ -23,25 +31,46 @@ var (
 	pprofFlag   = flag.Bool("pprof", false, "Enable http debug pprof")
 )
 
+func printInterface(ins []pcap.Interface) {
+	var (
+		maxLength int
+	)
+	for _, i := range ins {
+		if len(i.Name) > maxLength {
+			maxLength = len(i.Name)
+		}
+	}
+	fmt.Printf("%-6s %-"+strconv.Itoa(maxLength+2)+"s %-16s %s\n", "Index", "Name", "IP", "Description")
+	for idx, i := range ins {
+		ipAddr := ""
+		if len(i.Addresses) > 0 {
+			for _, addr := range i.Addresses {
+				if len(addr.IP) == net.IPv4len {
+					ipAddr = addr.IP.String()
+				}
+			}
+		}
+		fmt.Printf("%-6d %-"+strconv.Itoa(maxLength+2)+"s %-16s %s\n", idx, i.Name, ipAddr, i.Description)
+	}
+}
+
 func main() {
 	var (
-		err error
-		ins []pcap.Interface
+		err   error
+		iface string
+		ins   []pcap.Interface
 	)
 	flag.Parse()
 	if *versionFlag {
 		fmt.Println(version.Info())
 		os.Exit(0)
 	}
+	if ins, err = pcap.FindAllDevs(); err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
 	if *deviceFlag {
-		if ins, err = pcap.FindAllDevs(); err != nil {
-			fmt.Println(err.Error())
-			os.Exit(1)
-		}
-		fmt.Printf("%-36s %s\n", "Name", "Description")
-		for _, i := range ins {
-			fmt.Printf("%-36s %s\n", i.Name, i.Description)
-		}
+		printInterface(ins)
 		os.Exit(0)
 	}
 	if *pprofFlag {
@@ -49,13 +78,32 @@ func main() {
 			_ = http.ListenAndServe(":8080", nil)
 		}()
 	}
+	if numReg.MatchString(*ifaceFlag) {
+		i, _ := strconv.Atoi(*ifaceFlag)
+		if i < len(ins) {
+			iface = ins[i].Name
+		}
+	} else {
+		for _, i := range ins {
+			if i.Name == *ifaceFlag {
+				iface = i.Name
+				break
+			}
+		}
+	}
+	if iface == "" {
+		printInterface(ins)
+		os.Exit(0)
+	}
+	fmt.Println(iface)
+	time.Sleep(time.Second)
 	app := httpcap.NewApp(&httpcap.Filter{
 		IP:   *ipFlag,
 		Port: *portFlag,
 		Host: *hostFlag,
 		BPF:  *filterFlag,
 	})
-	if err = app.Run(context.Background(), *ifaceFlag); err != nil {
+	if err = app.Run(context.Background(), iface); err != nil {
 		fmt.Println(err.Error())
 		os.Exit(1)
 	}
