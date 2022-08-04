@@ -22,19 +22,10 @@ type Buffer struct {
 	readDeadline time.Time
 	buf          *bytes.Buffer
 	lastOp       time.Time
-	abnormal     int32
 }
 
 func (r *Buffer) Reader() *bufio.Reader {
 	return r.br
-}
-
-func (r *Buffer) SetAbnormal() {
-	atomic.StoreInt32(&r.abnormal, 1)
-}
-
-func (r *Buffer) Abnormal() bool {
-	return atomic.LoadInt32(&r.abnormal) == 1
 }
 
 func (r *Buffer) Discard() {
@@ -42,7 +33,6 @@ func (r *Buffer) Discard() {
 	if s := r.br.Buffered(); s > 0 {
 		r.br.Discard(s)
 	}
-	atomic.StoreInt32(&r.abnormal, 0)
 }
 
 func (r *Buffer) PutBytes(b []byte) (err error) {

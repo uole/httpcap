@@ -3,6 +3,7 @@ package tcp
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/reassembly"
@@ -10,6 +11,7 @@ import (
 	iopkg "github.com/uole/httpcap/internal/io"
 	"io"
 	"net/http"
+	"sync/atomic"
 	"time"
 )
 
@@ -40,6 +42,7 @@ type (
 		dstAddr     string
 		isHttp      bool
 		isWebsocket bool
+		abnormal    int32
 		writer      io.Writer
 	}
 )
@@ -81,19 +84,15 @@ func (stream *Stream) ReassembledSG(sg reassembly.ScatterGather, ac reassembly.A
 	length, _ = sg.Lengths()
 	if stream.isHttp && length > 0 {
 		buf = sg.Fetch(length)
-		if dir == reassembly.TCPDirClientToServer {
-			if stream.up.Abnormal() {
-				if isHttpRequest(buf) {
-					stream.up.Discard()
-				}
+		if atomic.LoadInt32(&stream.abnormal) == 1 {
+			if isHttpRequest(buf) {
+				stream.Discard()
+				atomic.StoreInt32(&stream.abnormal, 0)
 			}
+		}
+		if dir == reassembly.TCPDirClientToServer {
 			_ = stream.up.PutBytes(buf)
 		} else {
-			if stream.down.Abnormal() {
-				if isHttpResponse(buf) {
-					stream.down.Discard()
-				}
-			}
 			_ = stream.down.PutBytes(buf)
 		}
 	}
@@ -105,11 +104,25 @@ func (stream *Stream) ReassemblyComplete(ac reassembly.AssemblerContext) bool {
 	return true
 }
 
+func (stream *Stream) Discard() {
+	stream.up.Discard()
+	stream.down.Discard()
+}
+
+func (stream *Stream) Close() {
+	_ = stream.up.Close()
+	_ = stream.down.Close()
+}
+
 func (stream *Stream) FetchRequest() (req *httpkg.Request, res *httpkg.Response, err error) {
 __retry:
 	if req, err = httpkg.ReadRequest(stream.up.Reader()); err != nil {
+		if stream.writer != nil {
+			fmt.Fprintf(stream.writer, "stream %d read request error: %s\n", stream.id, err.Error())
+		}
 		if !errors.Is(err, io.ErrClosedPipe) {
-			stream.up.SetAbnormal()
+			atomic.StoreInt32(&stream.abnormal, 1)
+			stream.Discard()
 			goto __retry
 		}
 		return
@@ -121,8 +134,12 @@ __retry:
 	}
 	stream.down.SetReadDeadline(time.Now().Add(time.Second * 10))
 	if res, err = httpkg.ReadResponse(stream.down.Reader(), req); err != nil {
+		if stream.writer != nil {
+			fmt.Fprintf(stream.writer, "stream %d read response error: %s\n", stream.id, err.Error())
+		}
 		if !errors.Is(err, io.ErrClosedPipe) {
-			stream.down.SetAbnormal()
+			atomic.StoreInt32(&stream.abnormal, 1)
+			stream.Discard()
 			goto __retry
 		}
 	}

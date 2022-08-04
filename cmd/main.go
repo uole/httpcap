@@ -21,9 +21,9 @@ var (
 )
 
 var (
-	ifaceFlag   = flag.String("i", "7", "name of interface")
+	ifaceFlag   = flag.String("i", "", "name or index of interface")
 	filterFlag  = flag.String("f", "", "BPF filter in libpcap filter syntax")
-	portFlag    = flag.Int("p", 80, "filter source or target port")
+	portFlag    = flag.Int("p", 0, "filter source or target port")
 	ipFlag      = flag.String("ip", "", "filter source or target ip")
 	hostFlag    = flag.String("host", "", "filter http request host, using wildcard match(*)")
 	versionFlag = flag.Bool("v", false, "display version info and exit")

@@ -78,8 +78,8 @@ func (r *Response) WriteTo(w io.Writer) (n int64, err error) {
 			_, err = writer.Write(r.Body)
 		} else {
 			wc := hex.Dumper(writer)
-			wc.Write(r.Body)
-			wc.Close()
+			_, _ = wc.Write(r.Body)
+			_ = wc.Close()
 		}
 	}
 	return writer.WriteTo(w)
@@ -98,8 +98,8 @@ func (r *Response) Dumper(w io.Writer, displayLargeBody bool) (n int64, err erro
 				_, err = writer.Write(r.Body)
 			} else {
 				wc := hex.Dumper(writer)
-				wc.Write(r.Body)
-				wc.Close()
+				_, _ = wc.Write(r.Body)
+				_ = wc.Close()
 			}
 		}
 	}

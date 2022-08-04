@@ -50,21 +50,9 @@ func (cap *Capture) ioLoop(assembler *reassembly.Assembler) {
 			}
 			if tcp, ok := pkg.TransportLayer().(*layers.TCP); ok {
 				assembler.AssembleWithContext(pkg.NetworkLayer().NetworkFlow(), tcp, &AssemblerContext{captureInfo: pkg.Metadata().CaptureInfo})
-				//if assembler, ok := v.(*reassembly.Assembler); ok {
-				//	assembler.AssembleWithContext(pkg.NetworkLayer().NetworkFlow(), tcp, &AssemblerContext{captureInfo: pkg.Metadata().CaptureInfo})
-				//}
-				//if assembler, ok := v.(*tcpassembly.Assembler); ok {
-				//	assembler.AssembleWithTimestamp(pkg.NetworkLayer().NetworkFlow(), tcp, pkg.Metadata().Timestamp)
-				//}
 			}
 		case <-ticker.C:
 			assembler.FlushCloseOlderThan(time.Now().Add(time.Minute * -3))
-			//if assembler, ok := v.(*reassembly.Assembler); ok {
-			//	assembler.FlushCloseOlderThan(time.Now().Add(time.Minute * -2))
-			//}
-			//if assembler, ok := v.(*tcpassembly.Assembler); ok {
-			//	assembler.FlushOlderThan(time.Now().Add(time.Minute * -2))
-			//}
 		case <-cap.ctx.Done():
 			return
 		}

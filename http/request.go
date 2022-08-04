@@ -49,8 +49,13 @@ func ReadRequest(b *bufio.Reader) (req *Request, err error) {
 	)
 	tp := newTextprotoReader(b)
 	req = new(Request)
-	if s, err = tp.ReadLine(); err != nil {
-		return nil, err
+	for {
+		if s, err = tp.ReadLine(); err != nil {
+			return nil, err
+		}
+		if len(s) > 0 {
+			break
+		}
 	}
 	defer func() {
 		putTextprotoReader(tp)
